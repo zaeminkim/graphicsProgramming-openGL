@@ -12,13 +12,12 @@ struct Material {
 	vec3 defaultAmbient;
 	vec3 defaultDiffuse;
 	vec3 defaultSpecular;
-
 	int useDiffuseMap;
 	int useSpecularMap;
 }; 
 
 struct Light { 
-    vec3 position; 
+    vec3 direction; 
 
     vec3 ambient; 
     vec3 diffuse; 
@@ -39,7 +38,7 @@ vec3 matSpecularColor;
 
 void main()
 {
-	if(useNormal != 0)
+	if(useNormal != 0) // 노멀이 0이 아니라면 라이팅 연산을 한다
 	{
 		// properties
 		vec3 norm = normalize(vsNormal);
@@ -64,7 +63,7 @@ void main()
 		vec3 ambient = light.ambient * matAmbientColor;
   	
 		// diffuse 
-		vec3 lightDir = normalize(light.position - vsPos);
+		vec3 lightDir = normalize(-light.direction);
 		float diff = max(dot(norm, lightDir), 0.0);
 		vec3 diffuse = light.diffuse * diff * matDiffuseColor;
     
@@ -76,6 +75,6 @@ void main()
 		vec3 result = ambient + diffuse + specular;
 		fragColor = vec4(result, 1.0);
 	}
-	else
+	else // 노멀이 0이라면 기본값을 사용한다
 		fragColor = vec4(material.defaultDiffuse, 1.0);
 } 
