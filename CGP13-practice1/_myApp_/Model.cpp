@@ -1,13 +1,6 @@
-//Assimp::Importer로 scene.gltf 읽기
-//aiScene 가져오기
-//aiNode를 재귀적으로 탐색
-//aiMesh를 Mesh 클래스로 변환
-//material / texture 정보 읽기
-//여러 개의 Mesh를 관리
-//=Assimp로 파일을 읽는 역할
-
 #include "Model.h"
 
+#include <fstream>
 #include <iostream>
 
 #include <assimp/Importer.hpp>
@@ -15,39 +8,47 @@
 
 #include "Texture.h"
 
+namespace {
+std::string resolveTexturePath(const std::string& directory, const std::string& textureFile) {
+    const std::string directPath = directory + "/" + textureFile;
+    std::ifstream directFile(directPath, std::ios::binary);
+    if (directFile.good()) {
+        return directPath;
+    }
+
+    const std::string texturesSubdirPath = directory + "/textures/" + textureFile;
+    std::ifstream texturesSubdirFile(texturesSubdirPath, std::ios::binary);
+    if (texturesSubdirFile.good()) {
+        return texturesSubdirPath;
+    }
+
+    return directPath;
+}
+}
+
+vmath::mat4 Model::ConvertMatrixToVMath(const aiMatrix4x4& from) {
+    vmath::mat4 out;
+    out[0] = vmath::vec4(from.a1, from.b1, from.c1, from.d1);
+    out[1] = vmath::vec4(from.a2, from.b2, from.c2, from.d2);
+    out[2] = vmath::vec4(from.a3, from.b3, from.c3, from.d3);
+    out[3] = vmath::vec4(from.a4, from.b4, from.c4, from.d4);
+    return out;
+}
+
 Model::Model()
-    : diffuseMap(0),
-    specularMap(0),
-    shininess(32.0f),
-    defaultAmbient(1.0f, 1.0f, 1.0f),
-    defaultDiffuse(1.0f, 1.0f, 1.0f),
-    defaultSpecular(0.0f, 0.0f, 0.0f),
-    useDiffuseMap(false),
-    useSpecularMap(false)
-{
+    : shininess(32.0f),
+      defaultAmbient(1.0f, 1.0f, 1.0f),
+      defaultDiffuse(1.0f, 1.0f, 1.0f),
+      defaultSpecular(0.0f, 0.0f, 0.0f),
+      useSpecularMap(false),
+      m_BoneCounter(0),
+      m_GlobalInverseTransform(vmath::mat4::identity()) {
 }
 
-Model::~Model()
-{
-    if (diffuseMap)
-    {
-        glDeleteTextures(1, &diffuseMap);
-    }
-
-    if (specularMap)
-    {
-        glDeleteTextures(1, &specularMap);
-    }
+Model::~Model() {
 }
 
-void Model::init()
-{
-    glGenTextures(1, &diffuseMap);
-    glGenTextures(1, &specularMap);
-}
-
-bool Model::loadModel(const std::string& path)
-{
+bool Model::loadModel(const std::string& path) {
     Assimp::Importer importer;
 
     const aiScene* scene = importer.ReadFile(
@@ -57,291 +58,195 @@ bool Model::loadModel(const std::string& path)
         aiProcess_GenSmoothNormals
     );
 
-    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
-    {
+    if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
         std::cout << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
         return false;
     }
 
-    size_t slashPos = path.find_last_of("/\\");
+    meshes.clear();
+    m_BoneInfoMap.clear();
+    m_BoneCounter = 0;
 
-    if (slashPos == std::string::npos)
-    {
-        directory = ".";
-    }
-    else
-    {
-        directory = path.substr(0, slashPos);
-    }
+    size_t slashPos = path.find_last_of("\\/");
+    directory = (slashPos == std::string::npos) ? "." : path.substr(0, slashPos);
 
+    aiMatrix4x4 globalTransform = scene->mRootNode->mTransformation;
+    globalTransform.Inverse();
+    m_GlobalInverseTransform = ConvertMatrixToVMath(globalTransform);
+
+    readHierarchyData(m_RootNode, scene->mRootNode);
     processNode(scene->mRootNode, scene);
 
     return true;
 }
 
-void Model::processNode(aiNode* node, const aiScene* scene)
-{
-    for (unsigned int i = 0; i < node->mNumMeshes; i++)
-    {
+void Model::processNode(aiNode* node, const aiScene* scene) {
+    for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
         meshes.push_back(processMesh(mesh, scene));
     }
 
-    for (unsigned int i = 0; i < node->mNumChildren; i++)
-    {
+    for (unsigned int i = 0; i < node->mNumChildren; ++i) {
         processNode(node->mChildren[i], scene);
     }
 }
 
-// position, normal, index, material texture 정보를 Mesh로 넘기는 함수
-Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
-{
-    std::vector<vmath::vec3> vertices;
-    std::vector<vmath::vec2> texCoords;
-    std::vector<vmath::vec3> normals;
+Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene) {
+    std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;
 
-    for (unsigned int i = 0; i < mesh->mNumVertices; i++)
-    {
-        vmath::vec3 position;
-        position[0] = mesh->mVertices[i].x;
-        position[1] = mesh->mVertices[i].y;
-        position[2] = mesh->mVertices[i].z;
-        vertices.push_back(position);
+    vertices.resize(mesh->mNumVertices);
+    for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
+        Vertex vertex;
+        setVertexBoneDataToDefault(vertex);
 
-        if (mesh->HasNormals())
-        {
-            vmath::vec3 normal;
-            normal[0] = mesh->mNormals[i].x;
-            normal[1] = mesh->mNormals[i].y;
-            normal[2] = mesh->mNormals[i].z;
-            normals.push_back(normal);
+        vertex.Position = vmath::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
+
+        if (mesh->HasNormals()) {
+            vertex.Normal = vmath::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
         }
 
-        if (mesh->mTextureCoords[0])
-        {
-            vmath::vec2 texCoord;
-            texCoord[0] = mesh->mTextureCoords[0][i].x;
-            texCoord[1] = mesh->mTextureCoords[0][i].y;
-            texCoords.push_back(texCoord);
+        if (mesh->mTextureCoords[0]) {
+            vertex.TexCoords = vmath::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y);
+        } else {
+            vertex.TexCoords = vmath::vec2(0.0f, 0.0f);
         }
-        else
-        {
-            texCoords.push_back(vmath::vec2(0.0f, 0.0f));
-        }
+
+        vertices[i] = vertex;
     }
 
-    for (unsigned int i = 0; i < mesh->mNumFaces; i++)
-    {
-        aiFace face = mesh->mFaces[i];
-
-        for (unsigned int j = 0; j < face.mNumIndices; j++)
-        {
+    for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
+        const aiFace& face = mesh->mFaces[i];
+        for (unsigned int j = 0; j < face.mNumIndices; ++j) {
             indices.push_back(face.mIndices[j]);
         }
     }
 
+    extractBoneWeightForVertices(vertices, mesh, scene);
 
     GLuint diffuseTexture = 0;
 
-    if (mesh->mMaterialIndex >= 0)
-    {
+    if (mesh->mMaterialIndex >= 0) {
         aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-
         aiString texturePath;
 
         bool foundTexture = false;
-
-        // glTF에서는 base color texture가 diffuse 역할을 함
-        if (material->GetTexture(aiTextureType_BASE_COLOR, 0, &texturePath) == AI_SUCCESS)
-        {
+        if (material->GetTexture(aiTextureType_BASE_COLOR, 0, &texturePath) == AI_SUCCESS) {
             foundTexture = true;
-        }
-        else if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS)
-        {
+        } else if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
             foundTexture = true;
         }
 
-        if (foundTexture)
-        {
+        if (foundTexture) {
             std::string textureFile = texturePath.C_Str();
-            std::string fullPath = directory + "/" + textureFile;
+            std::string fullPath = resolveTexturePath(directory, textureFile);
 
             glGenTextures(1, &diffuseTexture);
-
-            if (!loadTextureFile(diffuseTexture, fullPath.c_str()))
-            {
+            if (!loadTextureFile(diffuseTexture, fullPath.c_str())) {
                 std::cout << "Texture load failed: " << fullPath << std::endl;
                 glDeleteTextures(1, &diffuseTexture);
                 diffuseTexture = 0;
             }
-            else
-            {
-                std::cout << "Texture loaded: " << fullPath << std::endl;
+        }
+    }
+
+    return Mesh(vertices, indices, diffuseTexture);
+}
+
+void Model::setVertexBoneDataToDefault(Vertex& vertex) {
+    for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+        vertex.BoneIDs[i] = -1;
+        vertex.Weights[i] = 0.0f;
+    }
+}
+
+void Model::setVertexBoneData(Vertex& vertex, int boneID, float weight) {
+    for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+        if (vertex.BoneIDs[i] < 0) {
+            vertex.BoneIDs[i] = boneID;
+            vertex.Weights[i] = weight;
+            return;
+        }
+    }
+}
+
+void Model::extractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh, const aiScene* scene) {
+    (void)scene;
+
+    for (unsigned int boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex) {
+        int boneID = -1;
+        std::string boneName = mesh->mBones[boneIndex]->mName.C_Str();
+
+        auto it = m_BoneInfoMap.find(boneName);
+        if (it == m_BoneInfoMap.end()) {
+            if (m_BoneCounter >= MAX_BONES) {
+                continue;
+            }
+
+            BoneInfo newBoneInfo;
+            newBoneInfo.id = m_BoneCounter;
+            newBoneInfo.offset = ConvertMatrixToVMath(mesh->mBones[boneIndex]->mOffsetMatrix);
+            m_BoneInfoMap[boneName] = newBoneInfo;
+            boneID = m_BoneCounter;
+            ++m_BoneCounter;
+        } else {
+            boneID = it->second.id;
+        }
+
+        const aiVertexWeight* weights = mesh->mBones[boneIndex]->mWeights;
+        const unsigned int numWeights = mesh->mBones[boneIndex]->mNumWeights;
+
+        for (unsigned int weightIndex = 0; weightIndex < numWeights; ++weightIndex) {
+            const int vertexId = static_cast<int>(weights[weightIndex].mVertexId);
+            const float weight = weights[weightIndex].mWeight;
+
+            if (vertexId >= 0 && vertexId < static_cast<int>(vertices.size())) {
+                setVertexBoneData(vertices[vertexId], boneID, weight);
             }
         }
     }
-
-    return Mesh(vertices, texCoords, normals, indices, diffuseTexture);
 }
 
-void Model::setupMesh(
-    int numVertices,
-    GLfloat* positions,
-    GLfloat* texCoords,
-    GLfloat* normals
-)
-{
-    std::vector<vmath::vec3> vertexPositions;
-    std::vector<vmath::vec2> vertexTexCoords;
-    std::vector<vmath::vec3> vertexNormals;
-    std::vector<unsigned int> indices;
+void Model::readHierarchyData(AssimpNodeData& dest, const aiNode* src) {
+    dest.name = src->mName.C_Str();
+    dest.transformation = ConvertMatrixToVMath(src->mTransformation);
+    dest.childrenCount = static_cast<int>(src->mNumChildren);
+    dest.children.clear();
+    dest.children.reserve(src->mNumChildren);
 
-    for (int i = 0; i < numVertices; i++)
-    {
-        vertexPositions.push_back(
-            vmath::vec3(
-                positions[i * 3],
-                positions[i * 3 + 1],
-                positions[i * 3 + 2]
-            )
-        );
+    for (unsigned int i = 0; i < src->mNumChildren; ++i) {
+        AssimpNodeData child;
+        readHierarchyData(child, src->mChildren[i]);
+        dest.children.push_back(child);
     }
-
-    if (texCoords)
-    {
-        for (int i = 0; i < numVertices; i++)
-        {
-            vertexTexCoords.push_back(
-                vmath::vec2(
-                    texCoords[i * 2],
-                    texCoords[i * 2 + 1]
-                )
-            );
-        }
-    }
-
-    if (normals)
-    {
-        for (int i = 0; i < numVertices; i++)
-        {
-            vertexNormals.push_back(
-                vmath::vec3(
-                    normals[i * 3],
-                    normals[i * 3 + 1],
-                    normals[i * 3 + 2]
-                )
-            );
-        }
-    }
-
-    meshes.push_back(
-        Mesh(vertexPositions, vertexTexCoords, vertexNormals, indices)
-    );
 }
 
-void Model::setupIndices(int numIndices, GLuint* indices)
-{
-    if (meshes.empty())
-    {
-        return;
-    }
+void Model::draw(GLuint shaderID) {
+    glUniform3fv(glGetUniformLocation(shaderID, "material.defaultAmbient"), 1, defaultAmbient);
+    glUniform3fv(glGetUniformLocation(shaderID, "material.defaultDiffuse"), 1, defaultDiffuse);
+    glUniform3fv(glGetUniformLocation(shaderID, "material.defaultSpecular"), 1, defaultSpecular);
 
-    std::vector<unsigned int> newIndices;
+    glUniform1i(glGetUniformLocation(shaderID, "material.useSpecularMap"), static_cast<int>(useSpecularMap));
+    glUniform1i(glGetUniformLocation(shaderID, "useNormal"), 1);
+    glUniform1f(glGetUniformLocation(shaderID, "material.shininess"), shininess);
 
-    for (int i = 0; i < numIndices; i++)
-    {
-        newIndices.push_back(indices[i]);
-    }
-
-    std::vector<vmath::vec3> vertices = meshes[0].vertices;
-    std::vector<vmath::vec2> texCoords = meshes[0].texCoords;
-    std::vector<vmath::vec3> normals = meshes[0].normals;
-
-    meshes.clear();
-    meshes.push_back(Mesh(vertices, texCoords, normals, newIndices));
-}
-
-bool Model::loadDiffuseMap(const char* filepath)
-{
-    if (loadTextureFile(diffuseMap, filepath))
-    {
-        useDiffuseMap = true;
-        return true;
-    }
-
-    useDiffuseMap = false;
-    return false;
-}
-
-bool Model::loadSpecularMap(const char* filepath)
-{
-    if (loadTextureFile(specularMap, filepath))
-    {
-        useSpecularMap = true;
-        return true;
-    }
-
-    useSpecularMap = false;
-    return false;
-}
-
-void Model::draw(GLuint shaderID)
-{
-    glUniform3fv(
-        glGetUniformLocation(shaderID, "material.defaultAmbient"),
-        1,
-        defaultAmbient
-    );
-
-    glUniform3fv(
-        glGetUniformLocation(shaderID, "material.defaultDiffuse"),
-        1,
-        defaultDiffuse
-    );
-
-    glUniform3fv(
-        glGetUniformLocation(shaderID, "material.defaultSpecular"),
-        1,
-        defaultSpecular
-    );
-
-    glUniform1i(
-        glGetUniformLocation(shaderID, "material.useDiffuseMap"),
-        static_cast<int>(useDiffuseMap)
-    );
-
-    glUniform1i(
-        glGetUniformLocation(shaderID, "material.useSpecularMap"),
-        static_cast<int>(useSpecularMap)
-    );
-
-    glUniform1i(
-        glGetUniformLocation(shaderID, "useNormal"),
-        meshes.empty() ? 0 : static_cast<int>(!meshes[0].normals.empty())
-    );
-
-    glUniform1f(
-        glGetUniformLocation(shaderID, "material.shininess"),
-        shininess
-    );
-
-    //if (useDiffuseMap)
-    //{
-    //    glUniform1i(glGetUniformLocation(shaderID, "material.diffuse"), 0);
-    //    glActiveTexture(GL_TEXTURE0);
-    //    glBindTexture(GL_TEXTURE_2D, diffuseMap);
-    //}
-
-    if (useSpecularMap)
-    {
-        glUniform1i(glGetUniformLocation(shaderID, "material.specular"), 1);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, specularMap);
-    }
-
-    for (auto& mesh : meshes)
-    {
+    for (auto& mesh : meshes) {
         mesh.draw(shaderID);
     }
+}
+
+std::unordered_map<std::string, BoneInfo>& Model::GetBoneInfoMap() {
+    return m_BoneInfoMap;
+}
+
+int& Model::GetBoneCount() {
+    return m_BoneCounter;
+}
+
+const AssimpNodeData& Model::GetRootNode() const {
+    return m_RootNode;
+}
+
+const vmath::mat4& Model::GetGlobalInverseTransform() const {
+    return m_GlobalInverseTransform;
 }

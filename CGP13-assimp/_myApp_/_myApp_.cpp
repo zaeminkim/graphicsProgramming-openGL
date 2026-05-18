@@ -1,14 +1,16 @@
-// sb6.h 헤더 파일을 포함시킨다.
+//OpenGL 초기화
+//Shader 생성
+//Model 로드
+//카메라 / 행렬 설정
+//render()에서 model->Draw()
+//=sb7 프레임워크의 메인 애플리케이션 클래스
+#include "Model.h"
+
 #include <sb7.h>
 #include <vmath.h>
 #include <shader.h>
 #include <vector>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#include "Model.h"
-
-// sb6::application을 상속받는다.
 class my_application : public sb7::application
 {
 public:
@@ -40,172 +42,10 @@ public:
 		// 쉐이더 프로그램 컴파일 및 연결
 		shader_program = compile_shader("simple_phong_vs.glsl", "simple_phong_fs.glsl");
 
-		stbi_set_flip_vertically_on_load(true);
-
-		// 두 번째 객체 정의 : 박스 --------------------------------------------------
-		// 박스 점들의 위치와 컬러, 텍스처 좌표를 정의한다.
-		//float box_s = 1.0f, box_t = 1.0f;
-		//GLfloat box_pos[] = {
-		//	// 뒷면
-		//	-0.25f, 0.5f, -0.25f,
-		//	0.25f, 0.0f, -0.25f,
-		//	-0.25f, 0.0f, -0.25f,
-		//	0.25f, 0.0f, -0.25f,
-		//	-0.25f, 0.5f, -0.25f,
-		//	0.25f, 0.5f, -0.25f,
-
-		//	// 우측면
-		//	0.25f, 0.0f, -0.25f,
-		//	0.25f, 0.5f, -0.25f,
-		//	0.25f, 0.0f, 0.25f,
-		//	0.25f, 0.0f, 0.25f,
-		//	0.25f, 0.5f, -0.25f,
-		//	0.25f, 0.5f, 0.25f,
-
-		//	// 정면
-		//	0.25f, 0.0f, 0.25f,
-		//	0.25f, 0.5f, 0.25f,
-		//	-0.25f, 0.0f, 0.25f,
-		//	-0.25f, 0.0f, 0.25f,
-		//	0.25f, 0.5f, 0.25f,
-		//	-0.25f, 0.5f, 0.25f,
-
-		//	// 좌측면
-		//	-0.25f, 0.0f, 0.25f,
-		//	-0.25f, 0.5f, 0.25f,
-		//	-0.25f, 0.0f, -0.25f,
-		//	-0.25f, 0.0f, -0.25f,
-		//	-0.25f, 0.5f, 0.25f,
-		//	-0.25f, 0.5f, -0.25f,
-
-		//	// 바닥면
-		//	-0.25f, 0.0f, 0.25f,
-		//	0.25f, 0.0f, -0.25f,
-		//	0.25f, 0.0f, 0.25f,
-		//	0.25f, 0.0f, -0.25f,
-		//	-0.25f, 0.0f, 0.25f,
-		//	-0.25f, 0.0f, -0.25f,
-
-		//	// 윗면
-		//	-0.25f, 0.5f, -0.25f,
-		//	0.25f, 0.5f, 0.25f,
-		//	0.25f, 0.5f, -0.25f,
-		//	0.25f, 0.5f, 0.25f,
-		//	-0.25f, 0.5f, -0.25f,
-		//	-0.25f, 0.5f, 0.25f,
-		//};
-
-		//GLfloat box_tex[] = {
-
-		//	box_s, box_t,
-		//	0.0f, 0.0f,
-		//	box_s, 0.0f,
-
-		//	0.0f, 0.0f,
-		//	box_s, box_t,
-		//	0.0f, box_t,
-
-		//	box_s, 0.0f,
-		//	box_s, box_t,
-		//	0.0f, 0.0f,
-
-		//	0.0f, 0.0f,
-		//	box_s, box_t,
-		//	0.0f, box_t,
-
-		//	box_s, 0.0f,
-		//	box_s, box_t,
-		//	0.0f, 0.0f,
-
-		//	0.0f, 0.0f,
-		//	box_s, box_t,
-		//	0.0f, box_t,
-
-		//	box_s, 0.0f,
-		//	box_s, box_t,
-		//	0.0f, 0.0f,
-
-		//	0.0f, 0.0f,
-		//	box_s, box_t,
-		//	0.0f, box_t,
-
-		//	box_s, 0.0f,
-		//	0.0f, box_t,
-		//	0.0f, 0.0f,
-
-		//	0.0f, box_t,
-		//	box_s, 0.0,
-		//	box_s, box_t,
-
-		//	0.0f, box_t,
-		//	box_s, 0.0f,
-		//	box_s, box_t,
-
-		//	box_s, 0.0f,
-		//	0.0f, box_t,
-		//	0.0f, 0.0f,
-		//};
-
-		//GLfloat box_norm[] = {
-
-		//	0.0f, 0.0f, -1.0f,
-		//	0.0f, 0.0f, -1.0f,
-		//	0.0f, 0.0f, -1.0f,
-
-		//	0.0f, 0.0f, -1.0f,
-		//	0.0f, 0.0f, -1.0f,
-		//	0.0f, 0.0f, -1.0f,
-
-		//	1.0f, 0.0f, 0.0f,
-		//	1.0f, 0.0f, 0.0f,
-		//	1.0f, 0.0f, 0.0f,
-
-		//	1.0f, 0.0f, 0.0f,
-		//	1.0f, 0.0f, 0.0f,
-		//	1.0f, 0.0f, 0.0f,
-
-		//	0.0f, 0.0f, 1.0f,
-		//	0.0f, 0.0f, 1.0f,
-		//	0.0f, 0.0f, 1.0f,
-
-		//	0.0f, 0.0f, 1.0f,
-		//	0.0f, 0.0f, 1.0f,
-		//	0.0f, 0.0f, 1.0f,
-
-		//	-1.0f, 0.0f, 0.0f,
-		//	-1.0f, 0.0f, 0.0f,
-		//	-1.0f, 0.0f, 0.0f,
-
-		//	-1.0f, 0.0f, 0.0f,
-		//	-1.0f, 0.0f, 0.0f,
-		//	-1.0f, 0.0f, 0.0f,
-
-		//	0.0f, -1.0f, 0.0f,
-		//	0.0f, -1.0f, 0.0f,
-		//	0.0f, -1.0f, 0.0f,
-
-		//	0.0f, -1.0f, 0.0f,
-		//	0.0f, -1.0f, 0.0f,
-		//	0.0f, -1.0f, 0.0f,
-
-		//	0.0f, 1.0f, 0.0f,
-		//	0.0f, 1.0f, 0.0f,
-		//	0.0f, 1.0f, 0.0f,
-
-		//	0.0f, 1.0f, 0.0f,
-		//	0.0f, 1.0f, 0.0f,
-		//	0.0f, 1.0f, 0.0f
-		//};
-
 		box.init();
-		//box.setupMesh(36, box_pos, box_tex, box_norm); // (개수, 배열, 배열, 배열)
-		//box.loadDiffuseMap("container2.png");
-		//box.loadSpecularMap("container2_specular.png");
-		box.loadOBJ("fatTitan.obj");
-		//box.defaultDiffuse = vmath::vec3(1.0f, 0.0f, 0.0f);
-		box.loadDiffuseMap("container2.png");
+		box.loadModel("model/scene.gltf");
 
-		// 박스 10개 포지션 설정
+		// 모델 포지션 설정
 		boxPositions.push_back(vmath::vec3(0.0f, 0.0f, 0.0f));
 		//boxPositions.push_back(vmath::vec3(2.0f, 5.0f, -15.0f));
 		//boxPositions.push_back(vmath::vec3(-1.5f, -2.2f, -2.5f));
@@ -218,7 +58,7 @@ public:
 		//boxPositions.push_back(vmath::vec3(-1.3f, 1.0f, -1.5f));
 
 
-	    // 세 번째 객체 정의 : 피라미드 --------------------------------------------------
+		//  세 번째 객체 정의 : 피라미드 --------------------------------------------------
 		// 피라미드 점들의 위치와 컬러, 텍스처 좌표를 정의한다.
 		GLfloat pyramid_vertices[] = {
 			1.0f, 0.0f, -1.0f,    // 우측 상단
@@ -268,7 +108,7 @@ public:
 		// 카메라 매트릭스 계산
 		float distance = 2.f;
 		vmath::vec3 eye((float)cos(currentTime * 0.1f) * distance, 1.0, (float)sin(currentTime * 0.1f) * distance);
-		vmath::vec3 center(0.0, 0.4, 0.0);
+		vmath::vec3 center(0.0, 0.5, 0.0);
 		vmath::vec3 up(0.0, 1.0, 0.0);
 		vmath::mat4 lookAt = vmath::lookat(eye, center, up);
 		float fov = 50.f;
@@ -282,7 +122,7 @@ public:
 
 
 
-		// 박스 그리기 ---------------------------------------
+		// fat Titan 그리기 ---------------------------------------
 		float angle = currentTime * 100;
 		vmath::mat4 rotateM = vmath::rotate(angle, 0.0f, 1.0f, 0.0f);
 

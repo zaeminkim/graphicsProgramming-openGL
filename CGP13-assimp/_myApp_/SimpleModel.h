@@ -1,5 +1,7 @@
-#ifndef MODEL_H
-#define MODEL_H
+#ifndef SIMPLE_MODEL_H
+#define SIMPLE_MODEL_H
+
+#include "Texture.h"
 
 #include <stdio.h>
 #include <string>
@@ -9,8 +11,10 @@
 #include <sb7.h>
 #include <vmath.h>
 
-class Model {
-// ë‚´ì¥ í´ë˜ìŠ¤ ë³€ìˆ˜
+#include "stb_image.h"
+
+class SimpleModel {
+	// ³»Àå Å¬·¡½º º¯¼ö
 public:
 	std::vector<vmath::vec3> vPositions;
 	std::vector<vmath::vec2> vTexCoords;
@@ -25,12 +29,12 @@ private:
 	GLuint VAO;
 	GLuint VBO_positions, VBO_texCoords, VBO_normals;
 	GLuint EBO;
-	bool useDiffuseMap, useSpecularMap; // ì‚¬ìš©ì—¬ë¶€ ì €ì¥í•˜ëŠ” boolí˜• ë³€ìˆ˜
+	bool useDiffuseMap, useSpecularMap; // »ç¿ë¿©ºÎ ÀúÀåÇÏ´Â boolÇü º¯¼ö
 
 public:
-	// ìƒì„±ì
-	Model() {
-		// ê¸°ë³¸ê°’ìœ¼ë¡œ ì´ˆê¸°í™”
+	// »ı¼ºÀÚ
+	SimpleModel() {
+		// ±âº»°ªÀ¸·Î ÃÊ±âÈ­
 		shininess = 32.f;
 		useDiffuseMap = false;
 		useSpecularMap = false;
@@ -39,8 +43,8 @@ public:
 		defaultDiffuse = vmath::vec3(1.0f, 1.0f, 1.0f);
 		defaultSpecular = vmath::vec3(0.0f, 0.0f, 0.0f);
 	}
-	// ì†Œë©¸ì
-	~Model() {
+	// ¼Ò¸êÀÚ
+	~SimpleModel() {
 		glDeleteTextures(1, &diffuseMap);
 		glDeleteTextures(1, &specularMap);
 
@@ -51,7 +55,7 @@ public:
 		glDeleteVertexArrays(1, &VAO);
 	}
 
-	// OpenGL ì˜¤ë¸Œì íŠ¸ ìƒì„±
+	// OpenGL ¿ÀºêÁ§Æ® »ı¼º
 	void init() {
 		glGenVertexArrays(1, &VAO);
 		glGenBuffers(1, &VBO_positions);
@@ -63,7 +67,7 @@ public:
 		glGenTextures(1, &specularMap);
 	}
 
-	// ë²„í…ìŠ¤ ì†ì„±ë“¤ì„ ì…ë ¥ë°›ì•„ -> vPositions, vTexCoords, vNormals ì— ì˜®ê¸°ê¸°
+	// ¹öÅØ½º ¼Ó¼ºµéÀ» ÀÔ·Â¹Ş¾Æ -> vPositions, vTexCoords, vNormals ¿¡ ¿Å±â±â
 	void setupMesh(int _numVertices, GLfloat* _vPositions, GLfloat* _vTexCoords = NULL, GLfloat* _vNormals = NULL) {
 		// 1. copy data from arrays
 		for (int i = 0; i < _numVertices; i++) {
@@ -71,10 +75,10 @@ public:
 			position[0] = _vPositions[i * 3 + 0];
 			position[1] = _vPositions[i * 3 + 1];
 			position[2] = _vPositions[i * 3 + 2];
-			this->vPositions.push_back(position); // push_back()ìœ¼ë¡œ vPositionì— positionê°’ì„ ë™ì ìœ¼ë¡œ ì¶”ê°€
+			this->vPositions.push_back(position); // push_back()À¸·Î vPosition¿¡ position°ªÀ» µ¿ÀûÀ¸·Î Ãß°¡
 		}
 
-		if (_vTexCoords) { // NULLì´ ì•„ë‹ ë•Œ
+		if (_vTexCoords) { // NULLÀÌ ¾Æ´Ò ¶§
 			for (int i = 0; i < _numVertices; i++) {
 				vmath::vec2 texCoords;
 				texCoords[0] = _vTexCoords[i * 2 + 0];
@@ -83,7 +87,7 @@ public:
 			}
 		}
 
-		if (_vNormals) { // NULLì´ ì•„ë‹ ë•Œ
+		if (_vNormals) { // NULLÀÌ ¾Æ´Ò ¶§
 			for (int i = 0; i < _numVertices; i++) {
 				vmath::vec3 normal;
 				normal[0] = _vNormals[i * 3 + 0];
@@ -94,23 +98,23 @@ public:
 		}
 
 		// 2. create buffers
-		// OpenGL ë²„í¼ ì±„ìš°ê¸°
+		// OpenGL ¹öÆÛ Ã¤¿ì±â
 		prepareBuffers();
 
 	}
 
 	void setupIndices(int _numIndices, GLuint* _indices) {
 		for (int i = 0; i < _numIndices; i++) {
-			vIndices.push_back(_indices[i]); // push_back()ìœ¼ë¡œ vIndicesì— ê°’ ì±„ìš°ê¸°
+			vIndices.push_back(_indices[i]); // push_back()À¸·Î vIndices¿¡ °ª Ã¤¿ì±â
 		}
-		// ë”°ë¡œ prepareBuffers() ì‚¬ìš©í•˜ì§€ ì•ŠìŒ
+		// µû·Î prepareBuffers() »ç¿ëÇÏÁö ¾ÊÀ½
 		glBindVertexArray(VAO);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, _numIndices * sizeof(int), &vIndices[0], GL_STATIC_DRAW);
 		glBindVertexArray(0);
 	}
-	
-	// boolí˜• : í…ìŠ¤ì²˜ ì´ë¯¸ì§€ì˜ ê²½ë¡œê°€ ë§ëŠ”ì§€ ì²´í¬
+
+	// boolÇü : ÅØ½ºÃ³ ÀÌ¹ÌÁöÀÇ °æ·Î°¡ ¸Â´ÂÁö Ã¼Å©
 	bool loadDiffuseMap(const char* _filepath) {
 		if (loadTextureFile(diffuseMap, _filepath)) {
 			useDiffuseMap = true;
@@ -121,7 +125,7 @@ public:
 		return false;
 	}
 
-	// boolí˜• : í…ìŠ¤ì²˜ ì´ë¯¸ì§€ì˜ ê²½ë¡œê°€ ë§ëŠ”ì§€ ì²´í¬
+	// boolÇü : ÅØ½ºÃ³ ÀÌ¹ÌÁöÀÇ °æ·Î°¡ ¸Â´ÂÁö Ã¼Å©
 	bool loadSpecularMap(const char* _filepath) {
 		if (loadTextureFile(specularMap, _filepath)) {
 			useSpecularMap = true;
@@ -132,7 +136,7 @@ public:
 		return false;
 	}
 
-	void draw(GLuint _shaderID) { // ì‰ì´ë” í”„ë¡œê·¸ë¨ IDë¥¼ ì…ë ¥ìœ¼ë¡œ ë°›ìŒ
+	void draw(GLuint _shaderID) { // ½¦ÀÌ´õ ÇÁ·Î±×·¥ ID¸¦ ÀÔ·ÂÀ¸·Î ¹ŞÀ½
 		glUniform3fv(glGetUniformLocation(_shaderID, "material.defaultAmbient"), 1, defaultAmbient);
 		glUniform3fv(glGetUniformLocation(_shaderID, "material.defaultDiffuse"), 1, defaultDiffuse);
 		glUniform3fv(glGetUniformLocation(_shaderID, "material.defaultSpecular"), 1, defaultSpecular);
@@ -155,20 +159,20 @@ public:
 		}
 
 		glBindVertexArray(VAO);
-		if (vIndices.empty()) // ì¸ë±ìŠ¤ ì •ë³´ê°€ ì—†ì„ ë•Œ
+		if (vIndices.empty()) // ÀÎµ¦½º Á¤º¸°¡ ¾øÀ» ¶§
 			glDrawArrays(GL_TRIANGLES, 0, vPositions.size());
 		else
 			glDrawElements(GL_TRIANGLES, vIndices.size(), GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
 	}
 
-	bool loadOBJ(const char* filepath) { 
+	bool loadOBJ(const char* filepath) {
 		FILE* file = fopen(filepath, "r");
 		if (file == NULL)
 			return false;
 
 		bool readVT = false, readVN = false;
-		// ì„ì‹œ ì €ì¥ ë³€ìˆ˜ë“¤
+		// ÀÓ½Ã ÀúÀå º¯¼öµé
 		std::vector<vmath::vec3> tmpPositions;
 		std::vector<vmath::vec2> tmpTexCoords;
 		std::vector<vmath::vec3> tmpNormals;
@@ -177,49 +181,49 @@ public:
 		while (true) {
 			char lineBuffer[512];
 
-			// ì²˜ìŒ í•œ ë‹¨ì–´ ì½ì–´ì˜¤ê¸°
+			// Ã³À½ ÇÑ ´Ü¾î ÀĞ¾î¿À±â
 			int res = fscanf(file, "%s", lineBuffer);
-			// íŒŒì¼ ëì´ë©´ ì½ê¸° ì¢…ë£Œ
+			// ÆÄÀÏ ³¡ÀÌ¸é ÀĞ±â Á¾·á
 			if (res == EOF)
 				break;
 
-			// ë²„í…ìŠ¤ 3ì°¨ì› í¬ì§€ì…˜ ì½ì–´ì˜¤ê¸°
+			// ¹öÅØ½º 3Â÷¿ø Æ÷Áö¼Ç ÀĞ¾î¿À±â
 			if (strcmp(lineBuffer, "v") == 0) {
 				vmath::vec3 v;
 				fscanf(file, "%f %f %f\n", &v[0], &v[1], &v[2]);
 				tmpPositions.push_back(v);
 			}
-			// ë²„í…ìŠ¤ í…ìŠ¤ì²˜ ì¢Œí‘œ ì½ì–´ì˜¤ê¸°
+			// ¹öÅØ½º ÅØ½ºÃ³ ÁÂÇ¥ ÀĞ¾î¿À±â
 			else if (strcmp(lineBuffer, "vt") == 0) {
 				vmath::vec2 vt;
 				fscanf(file, "%f %f\n", &vt[0], &vt[1]);
 				tmpTexCoords.push_back(vt);
 				readVT = true;
 			}
-			// ë²„í…ìŠ¤ ë…¸ë§ ì½ì–´ì˜¤ê¸°
+			// ¹öÅØ½º ³ë¸» ÀĞ¾î¿À±â
 			else if (strcmp(lineBuffer, "vn") == 0) {
 				vmath::vec3 vn;
 				fscanf(file, "%f %f %f\n", &vn[0], &vn[1], &vn[2]);
 				tmpNormals.push_back(vn);
 				readVN = true;
 			}
-			// í˜ì´ìŠ¤ ì¸ë±ìŠ¤ë“¤ ì½ì–´ì˜¤ê¸°
+			// ÆäÀÌ½º ÀÎµ¦½ºµé ÀĞ¾î¿À±â
 			else if (strcmp(lineBuffer, "f") == 0) {
 				GLuint vIndex[3], vtIndex[3], vnIndex[3];
 
-				// í¬ì§€ì…˜ë§Œ ìˆëŠ” ê²½ìš°
+				// Æ÷Áö¼Ç¸¸ ÀÖ´Â °æ¿ì
 				if (!readVT && !readVN) {
 					fscanf(file, "%d %d %d\n", &vIndex[0], &vIndex[1], &vIndex[2]);
 				}
-				// í¬ì§€ì…˜/í…ìŠ¤ì²˜ ì¢Œí‘œ ìˆëŠ” ê²½ìš°
+				// Æ÷Áö¼Ç/ÅØ½ºÃ³ ÁÂÇ¥ ÀÖ´Â °æ¿ì
 				else if (readVT && !readVN) {
 					fscanf(file, "%d/%d %d/%d %d/%d\n", &vIndex[0], &vtIndex[0], &vIndex[1], &vtIndex[1], &vIndex[2], &vtIndex[2]);
 				}
-				// í¬ì§€ì…˜/ë…¸ë©€ ìˆëŠ” ê²½ìš°
+				// Æ÷Áö¼Ç/³ë¸Ö ÀÖ´Â °æ¿ì
 				else if (!readVT && readVN) {
 					fscanf(file, "%d//%d %d//%d %d//%d\n", &vIndex[0], &vnIndex[0], &vIndex[1], &vnIndex[1], &vIndex[2], &vnIndex[2]);
 				}
-				// í¬ì§€ì…˜/í…ìŠ¤ì²˜ì¢Œí‘œ/ë…¸ë©€ ìˆëŠ” ê²½ìš°
+				// Æ÷Áö¼Ç/ÅØ½ºÃ³ÁÂÇ¥/³ë¸Ö ÀÖ´Â °æ¿ì
 				else if (readVT && readVN) {
 					fscanf(file, "%d/%d/%d %d/%d/%d %d/%d/%d\n", &vIndex[0], &vtIndex[0], &vnIndex[0], &vIndex[1], &vtIndex[1], &vnIndex[1], &vIndex[2], &vtIndex[2], &vnIndex[2]);
 				}
@@ -237,7 +241,7 @@ public:
 				fgets(trashBuffer, 1000, file);
 			}
 		}
-		// ê¸°ì¡´ì˜ ê°’ë“¤ì„ ì§€ìš°ê³  ì„ì‹œ ì €ì¥í–ˆë˜ ê°’ë“¤ì„ í´ë˜ìŠ¤ ë³€ìˆ˜ì— ì˜®ê¸°ê¸°
+		// ±âÁ¸ÀÇ °ªµéÀ» Áö¿ì°í ÀÓ½Ã ÀúÀåÇß´ø °ªµéÀ» Å¬·¡½º º¯¼ö¿¡ ¿Å±â±â
 		vPositions.clear();
 		vTexCoords.clear();
 		vNormals.clear();
@@ -265,12 +269,12 @@ private:
 	void prepareBuffers() {
 		glBindVertexArray(VAO);
 
-		glBindBuffer(GL_ARRAY_BUFFER, VBO_positions); // vPositionsë¡œ VBO_positionsì˜ ê°’ë“¤ì„ ì˜®ê¸°ê¸°
+		glBindBuffer(GL_ARRAY_BUFFER, VBO_positions); // vPositions·Î VBO_positionsÀÇ °ªµéÀ» ¿Å±â±â
 		glBufferData(GL_ARRAY_BUFFER, vPositions.size() * sizeof(vmath::vec3), &vPositions[0], GL_STATIC_DRAW);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
-		if (!vTexCoords.empty()) { // vTexCoordì— ê°’ì´ ë¹„ì–´ìˆì§€ ì•Šë‹¤ë©´
+		if (!vTexCoords.empty()) { // vTexCoord¿¡ °ªÀÌ ºñ¾îÀÖÁö ¾Ê´Ù¸é
 			glBindBuffer(GL_ARRAY_BUFFER, VBO_texCoords);
 			glBufferData(GL_ARRAY_BUFFER, vTexCoords.size() * sizeof(vmath::vec2), &vTexCoords[0], GL_STATIC_DRAW);
 			glEnableVertexAttribArray(1);
@@ -286,37 +290,6 @@ private:
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindVertexArray(0);
-	}
-
-	bool loadTextureFile(GLuint textureID, const char* filepath) {
-		int width, height, nrChannels;
-		unsigned char* data = stbi_load(filepath, &width, &height, &nrChannels, 0);
-
-		if (data) {
-			GLenum format;
-			if (nrChannels == 1)
-				format = GL_RED;
-			else if (nrChannels == 3) // R, G, B (ex. jpg)
-				format = GL_RGB;
-			else if (nrChannels == 4) // PNG
-				format = GL_RGBA;
-
-			glBindTexture(GL_TEXTURE_2D, textureID);
-
-			glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-			glGenerateMipmap(GL_TEXTURE_2D);
-
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-			stbi_image_free(data);
-			return true;
-		}
-
-		stbi_image_free(data);
-		return false;
 	}
 };
 

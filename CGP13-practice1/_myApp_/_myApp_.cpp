@@ -1,186 +1,169 @@
-//OpenGL 초기화
-//Shader 생성
-//Model 로드
-//카메라 / 행렬 설정
-//render()에서 model->Draw()
-//=sb7 프레임워크의 메인 애플리케이션 클래스
 #include "Model.h"
+#include "Animation.h"
+#include "Animator.h"
 
 #include <sb7.h>
 #include <vmath.h>
 #include <shader.h>
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <vector>
+#include <memory>
+#include <string>
 
-class my_application : public sb7::application
-{
+class my_application : public sb7::application {
 public:
-	// 쉐이더 프로그램 컴파일한다.
-	GLuint compile_shader(const char* vs_file, const char* fs_file)
-	{
-		// 버텍스 쉐이더를 생성하고 컴파일한다.
-		GLuint vertex_shader = sb7::shader::load(vs_file, GL_VERTEX_SHADER);
+    GLuint compile_shader(const char* vs_file, const char* fs_file) {
+        GLuint vertex_shader = sb7::shader::load(vs_file, GL_VERTEX_SHADER);
+        GLuint fragment_shader = sb7::shader::load(fs_file, GL_FRAGMENT_SHADER);
 
-		// 프래그먼트 쉐이더를 생성하고 컴파일한다.
-		GLuint fragment_shader = sb7::shader::load(fs_file, GL_FRAGMENT_SHADER);
+        GLuint program = glCreateProgram();
+        glAttachShader(program, vertex_shader);
+        glAttachShader(program, fragment_shader);
+        glLinkProgram(program);
 
-		// 프로그램을 생성하고 쉐이더를 Attach시키고 링크한다.
-		GLuint program = glCreateProgram();
-		glAttachShader(program, vertex_shader);
-		glAttachShader(program, fragment_shader);
-		glLinkProgram(program);
+        glDeleteShader(vertex_shader);
+        glDeleteShader(fragment_shader);
 
-		// 이제 프로그램이 쉐이더를 소유하므로 쉐이더를 삭제한다.
-		glDeleteShader(vertex_shader);
-		glDeleteShader(fragment_shader);
+        return program;
+    }
 
-		return program;
-	}
+    void startup() override {
+        shader_program = compile_shader("simple_phong_vs.glsl", "simple_phong_fs.glsl");
 
-	// 애플리케이션 초기화 수행한다.
-	virtual void startup()
-	{
-		// 쉐이더 프로그램 컴파일 및 연결
-		shader_program = compile_shader("simple_phong_vs.glsl", "simple_phong_fs.glsl");
+        box.loadModel("model/fat_titan.gltf");
+        boxPositions.push_back(vmath::vec3(0.0f, 0.0f, 0.0f));
+        computeModelBounds();
 
-		box.init();
-		//box.setupMesh(36, box_pos, box_tex, box_norm); // (개수, 배열, 배열, 배열)
-		//box.loadDiffuseMap("container2.png");
-		//box.loadSpecularMap("container2_specular.png");
-		box.loadModel("model/scene.gltf");
-		//box.loadDiffuseMap("model/5_body_1_0_0_baseColor.png");
+        animation = std::make_unique<Animation>("model/fat_titan.gltf", &box);
+        animator = std::make_unique<Animator>(animation.get());
 
-		// 모델 포지션 설정
-		boxPositions.push_back(vmath::vec3(0.0f, 0.0f, 0.0f));
-		//boxPositions.push_back(vmath::vec3(2.0f, 5.0f, -15.0f));
-		//boxPositions.push_back(vmath::vec3(-1.5f, -2.2f, -2.5f));
-		//boxPositions.push_back(vmath::vec3(-3.8f, -2.0f, -12.3f));
-		//boxPositions.push_back(vmath::vec3(2.4f, -0.4f, -3.5f));
-		//boxPositions.push_back(vmath::vec3(-1.7f, 3.0f, -7.5f));
-		//boxPositions.push_back(vmath::vec3(1.3f, -2.0f, -2.5f));
-		//boxPositions.push_back(vmath::vec3(1.5f, 2.0f, -2.5f));
-		//boxPositions.push_back(vmath::vec3(1.5f, 0.2f, -1.5f));
-		//boxPositions.push_back(vmath::vec3(-1.3f, 1.0f, -1.5f));
+        lastTime = 0.0;
+    }
 
+    void shutdown() override {
+        glDeleteProgram(shader_program);
+    }
 
-		//  세 번째 객체 정의 : 피라미드 --------------------------------------------------
-		// 피라미드 점들의 위치와 컬러, 텍스처 좌표를 정의한다.
-		GLfloat pyramid_vertices[] = {
-			1.0f, 0.0f, -1.0f,    // 우측 상단
-			-1.0f, 0.0f, -1.0f,   // 좌측 상단
-			-1.0f, 0.0f, 1.0f,    // 좌측 하단
-			1.0f, 0.0f, 1.0f,     // 우측 하단
-			0.0f, 1.0f, 0.0f,      // 상단 꼭지점
-			0.0f, -1.0f, 0.0f,      // 하단 꼭지점
-		};
+    void render(double currentTime) override {
+        const GLfloat black[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        glClearBufferfv(GL_COLOR, 0, black);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+        glViewport(0, 0, info.windowWidth, info.windowHeight);
 
-		// 삼각형으로 그릴 인덱스를 정의한다.
-		GLuint pyramid_indices[] = {
-			4, 0, 1,
-			4, 1, 2,
-			4, 2, 3,
-			4, 3, 0,
+        const float deltaTime = (lastTime == 0.0) ? 0.0f : static_cast<float>(currentTime - lastTime);
+        lastTime = currentTime;
 
-			5, 1, 0,
-			5, 2, 1,
-			5, 3, 2,
-			5, 0, 3,
-		};
+        if (animator) {
+            animator->UpdateAnimation(deltaTime);
+        }
 
-		pyramid.init();
-		pyramid.setupMesh(6, pyramid_vertices);
-		pyramid.setupIndices(24, pyramid_indices);
-	}
+        const vmath::vec3 anchorPosition = boxPositions.empty() ? vmath::vec3(0.0f, 0.0f, 0.0f) : boxPositions[0];
+        const vmath::vec3 center = anchorPosition + (modelCenterLocal * modelScale);
 
-	// 애플리케이션 끝날 때 호출된다.
-	virtual void shutdown()
-	{
-		glDeleteProgram(shader_program);
-	}
+        const float worldRadius = std::max(modelRadiusLocal * modelScale, 0.5f);
+        const vmath::vec3 target = center - vmath::vec3(0.0f, worldRadius * 0.4f, 0.0f);
+        const vmath::vec3 eye = center + vmath::vec3(worldRadius * 1.2f, worldRadius * 2.3f, worldRadius * 2.2f);
+        const vmath::vec3 up(0.0f, 1.0f, 0.0f);
+        const vmath::mat4 viewM = vmath::lookat(eye, target, up);
+        const vmath::mat4 projM = vmath::perspective(50.0f,
+                                                     static_cast<float>(info.windowWidth) / static_cast<float>(info.windowHeight),
+                                                     0.1f,
+                                                     1000.0f);
 
-	// 렌더링 virtual 함수를 작성해서 오버라이딩한다.
-	virtual void render(double currentTime)
-	{
-		//currentTime = 1.46;
-		//const GLfloat color[] = { (float)sin(currentTime) * 0.5f + 0.5f, (float)cos(currentTime) * 0.5f + 0.5f, 0.0f, 1.0f };
-		const GLfloat black[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-		glClearBufferfv(GL_COLOR, 0, black);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glEnable(GL_DEPTH_TEST);
-		glEnable(GL_CULL_FACE);
-		glViewport(0, 0, info.windowWidth, info.windowHeight);
+        const vmath::vec3 lightPos(static_cast<float>(sin(currentTime * 0.5)),
+                                   0.25f,
+                                   static_cast<float>(cos(currentTime * 0.5)) * 0.7f);
+        const vmath::vec3 viewPos = eye;
+        const vmath::vec3 lightAmbient(0.2f, 0.2f, 0.2f);
+        const vmath::vec3 lightDiffuse(0.5f, 0.5f, 0.5f);
+        const vmath::vec3 lightSpecular(1.0f, 1.0f, 1.0f);
 
-		// 카메라 매트릭스 계산
-		float distance = 2.f;
-		vmath::vec3 eye((float)cos(currentTime * 0.1f) * distance, 1.0, (float)sin(currentTime * 0.1f) * distance);
-		vmath::vec3 center(0.0, 0.5, 0.0);
-		vmath::vec3 up(0.0, 1.0, 0.0);
-		vmath::mat4 lookAt = vmath::lookat(eye, center, up);
-		float fov = 50.f;
-		vmath::mat4 projM = vmath::perspective(fov, (float)info.windowWidth / info.windowHeight, 0.1f, 1000.0f);
+        glUseProgram(shader_program);
 
+        glUniformMatrix4fv(glGetUniformLocation(shader_program, "projection"), 1, GL_FALSE, projM);
+        glUniformMatrix4fv(glGetUniformLocation(shader_program, "view"), 1, GL_FALSE, viewM);
 
-		// 라이팅 설정 ---------------------------------------
-		vmath::vec3 lightPos = vmath::vec3((float)sin(currentTime * 0.5f), 0.25f, (float)cos(currentTime * 0.5f) * 0.7f);// (0.0f, 0.5f, 0.0f);
-		vmath::vec3 lightColor(1.0f, 1.0f, 1.0f);
-		vmath::vec3 viewPos = eye;
+        glUniform3fv(glGetUniformLocation(shader_program, "viewPos"), 1, viewPos);
+        glUniform3fv(glGetUniformLocation(shader_program, "light.position"), 1, lightPos);
+        glUniform3fv(glGetUniformLocation(shader_program, "light.ambient"), 1, lightAmbient);
+        glUniform3fv(glGetUniformLocation(shader_program, "light.diffuse"), 1, lightDiffuse);
+        glUniform3fv(glGetUniformLocation(shader_program, "light.specular"), 1, lightSpecular);
 
+        if (animator) {
+            const auto& transforms = animator->GetFinalBoneMatrices();
+            for (int i = 0; i < static_cast<int>(transforms.size()); ++i) {
+                const std::string uniformName = "finalBonesMatrices[" + std::to_string(i) + "]";
+                glUniformMatrix4fv(glGetUniformLocation(shader_program, uniformName.c_str()),
+                                   1,
+                                   GL_FALSE,
+                                   transforms[i]);
+            }
+        }
 
-
-		// fat Titan 그리기 ---------------------------------------
-		float angle = currentTime * 100;
-		vmath::mat4 rotateM = vmath::rotate(angle, 0.0f, 1.0f, 0.0f);
-
-		glUseProgram(shader_program);
-
-		glUniformMatrix4fv(glGetUniformLocation(shader_program, "projection"), 1, GL_FALSE, projM);
-		glUniformMatrix4fv(glGetUniformLocation(shader_program, "view"), 1, GL_FALSE, lookAt);
-
-		glUniform3fv(glGetUniformLocation(shader_program, "viewPos"), 1, viewPos);
-
-		vmath::vec3 lightAmbient(0.2f, 0.2f, 0.2f);
-		vmath::vec3 lightDiffuse(0.5f, 0.5f, 0.5f);
-		vmath::vec3 lightSpecular(1.0f, 1.0f, 1.0f);
-		glUniform3fv(glGetUniformLocation(shader_program, "light.position"), 1, lightPos);
-		glUniform3fv(glGetUniformLocation(shader_program, "light.ambient"), 1, lightAmbient);
-		glUniform3fv(glGetUniformLocation(shader_program, "light.diffuse"), 1, lightDiffuse);
-		glUniform3fv(glGetUniformLocation(shader_program, "light.specular"), 1, lightSpecular);
-
-		for (int i = 0; i < boxPositions.size(); i++)
-		{
-			float angle = 20.f * i;
-			vmath::mat4 model = vmath::translate(boxPositions[i]) *
-				vmath::rotate(angle, 1.0f, 0.3f, 0.5f) *
-				vmath::scale(0.25f);
-			glUniformMatrix4fv(glGetUniformLocation(shader_program, "model"), 1, GL_FALSE, model);
-			box.draw(shader_program); // VAO, Texture 바인드 안 해도 됨 -> render()에서 draw() 하나만 작성하면 됨
-		}
-
-
-
-		// 피라미드 (광원) 그리기 ---------------------------------------
-		float move_y = (float)cos(currentTime) * 0.2f + 0.5f;
-		float scaleFactor = 0.05f;// (float)cos(currentTime)*0.05f + 0.2f;
-		vmath::mat4 transform = vmath::translate(lightPos) *
-			vmath::rotate(angle * 0.5f, 0.0f, 1.0f, 0.0f) *
-			vmath::scale(scaleFactor, scaleFactor, scaleFactor);
-
-		glUniformMatrix4fv(glGetUniformLocation(shader_program, "projection"), 1, GL_FALSE, projM);
-		glUniformMatrix4fv(glGetUniformLocation(shader_program, "view"), 1, GL_FALSE, lookAt);
-		glUniformMatrix4fv(glGetUniformLocation(shader_program, "model"), 1, GL_FALSE, transform);
-
-		pyramid.draw(shader_program);
-	}
-
-	void onResize(int w, int h)
-	{
-		sb7::application::onResize(w, h);
-	}
+        for (int i = 0; i < static_cast<int>(boxPositions.size()); ++i) {
+            const float angle = 20.0f * i;
+            vmath::mat4 modelM = vmath::translate(boxPositions[i])
+                               * vmath::rotate(angle, 1.0f, 0.3f, 0.5f)
+                               * vmath::scale(modelScale);
+            glUniformMatrix4fv(glGetUniformLocation(shader_program, "model"), 1, GL_FALSE, modelM);
+            box.draw(shader_program);
+        }
+    }
 
 private:
-	GLuint shader_program; // VAO, VBO 관련 멤버변수 필요없음 -> Model.h에 다 있기 때문
-	std::vector<vmath::vec3> boxPositions;
-	Model box, pyramid;
+    void computeModelBounds() {
+        float minX = std::numeric_limits<float>::max();
+        float minY = std::numeric_limits<float>::max();
+        float minZ = std::numeric_limits<float>::max();
+        float maxX = std::numeric_limits<float>::lowest();
+        float maxY = std::numeric_limits<float>::lowest();
+        float maxZ = std::numeric_limits<float>::lowest();
+        bool hasVertex = false;
+
+        for (const auto& mesh : box.meshes) {
+            for (const auto& vertex : mesh.vertices) {
+                hasVertex = true;
+                minX = std::min(minX, vertex.Position[0]);
+                minY = std::min(minY, vertex.Position[1]);
+                minZ = std::min(minZ, vertex.Position[2]);
+                maxX = std::max(maxX, vertex.Position[0]);
+                maxY = std::max(maxY, vertex.Position[1]);
+                maxZ = std::max(maxZ, vertex.Position[2]);
+            }
+        }
+
+        if (!hasVertex) {
+            modelCenterLocal = vmath::vec3(0.0f, 0.0f, 0.0f);
+            modelRadiusLocal = 1.0f;
+            return;
+        }
+
+        modelCenterLocal = vmath::vec3((minX + maxX) * 0.5f,
+                                       (minY + maxY) * 0.5f,
+                                       (minZ + maxZ) * 0.5f);
+
+        const float dx = maxX - minX;
+        const float dy = maxY - minY;
+        const float dz = maxZ - minZ;
+        modelRadiusLocal = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
+    }
+
+    GLuint shader_program = 0;
+    double lastTime = 0.0;
+    float modelScale = 0.01f;
+    vmath::vec3 modelCenterLocal = vmath::vec3(0.0f, 0.0f, 0.0f);
+    float modelRadiusLocal = 1.0f;
+
+    std::vector<vmath::vec3> boxPositions;
+    Model box;
+
+    std::unique_ptr<Animation> animation;
+    std::unique_ptr<Animator> animator;
 };
 
-// DECLARE_MAIN의 하나뿐인 인스턴스
 DECLARE_MAIN(my_application)

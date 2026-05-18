@@ -12,6 +12,7 @@ struct Material {
 	vec3 defaultAmbient;
 	vec3 defaultDiffuse;
 	vec3 defaultSpecular;
+
 	int useDiffuseMap;
 	int useSpecularMap;
 }; 
@@ -38,7 +39,7 @@ vec3 matSpecularColor;
 
 void main()
 {
-	if(useNormal != 0) // 노멀이 0이 아니라면 라이팅 연산을 한다
+	if(useNormal != 0)
 	{
 		// properties
 		vec3 norm = normalize(vsNormal);
@@ -75,6 +76,6 @@ void main()
 		vec3 result = ambient + diffuse + specular;
 		fragColor = vec4(result, 1.0);
 	}
-	else // 노멀이 0이라면 기본값을 사용한다
+	else
 		fragColor = vec4(material.defaultDiffuse, 1.0);
 } 

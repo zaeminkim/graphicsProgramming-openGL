@@ -7,32 +7,41 @@
 #include <sb7.h>
 #include <vmath.h>
 
-class Mesh
-{
+constexpr int MAX_BONE_INFLUENCE = 4;
+
+struct Vertex {
+    vmath::vec3 Position;
+    vmath::vec2 TexCoords;
+    vmath::vec3 Normal;
+    int BoneIDs[MAX_BONE_INFLUENCE];
+    float Weights[MAX_BONE_INFLUENCE];
+
+    Vertex()
+        : Position(0.0f), TexCoords(0.0f), Normal(0.0f) {
+        for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+            BoneIDs[i] = -1;
+            Weights[i] = 0.0f;
+        }
+    }
+};
+
+class Mesh {
 public:
-    std::vector<vmath::vec3> vertices;
-    std::vector<vmath::vec2> texCoords;
-    std::vector<vmath::vec3> normals;
+    std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;
 
     GLuint VAO;
-    GLuint VBO_pos;
-    GLuint VBO_tex;
-    GLuint VBO_norm;
+    GLuint VBO;
     GLuint EBO;
 
-    // Mesh마다 다른 Texture 적용을 위해 추가
     GLuint diffuseTexture;
     bool hasDiffuseTexture;
+    bool hasNormals;
 
 public:
-    Mesh(
-        const std::vector<vmath::vec3>& vertices,
-        const std::vector<vmath::vec2>& texCoords,
-        const std::vector<vmath::vec3>& normals,
-        const std::vector<unsigned int>& indices,
-        GLuint diffuseTexture = 0
-    );
+    Mesh(const std::vector<Vertex>& vertices,
+         const std::vector<unsigned int>& indices,
+         GLuint diffuseTexture = 0);
 
     Mesh(const Mesh&) = delete;
     Mesh& operator=(const Mesh&) = delete;
