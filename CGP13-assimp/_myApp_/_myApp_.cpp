@@ -81,10 +81,13 @@ public:
 		bg.loadDiffuseMap("wall.jpg");
 
 		titan.init();
-		titan.loadModel("model/walkingtitan.gltf");
+		titan.loadModel("model/fatTitan.gltf");
 
-		titanWalk = new Animation("model/walkingtitan.gltf", &titan);
-		titanAnimator = new Animator(titanWalk);
+		titanIdle = new Animation("model/fatTitan.gltf", &titan, "Idle");
+		titanWalk = new Animation("model/fatTitan.gltf", &titan, "Walk");
+		titanAttack = new Animation("model/fatTitan.gltf", &titan, "Attack");
+
+		titanAnimator = new Animator(titanIdle);
 
 		// player 초기 위치
 		playerPos = vmath::vec3(0.0f, 0.0f, 20.0f);
@@ -99,10 +102,16 @@ public:
 	virtual void shutdown()
 	{
 		glDeleteProgram(shader_program[0]);
+
 		delete titanAnimator;
+		delete titanIdle;
 		delete titanWalk;
+		delete titanAttack;
+
 		titanAnimator = nullptr;
+		titanIdle = nullptr;
 		titanWalk = nullptr;
+		titanAttack = nullptr;
 	}
 
 	virtual void render(double currentTime)
@@ -117,8 +126,16 @@ public:
 
 		updatePlayer(deltaTime);
 
-		if (playerMoving && titanAnimator)
+		//// playerMoving : 이동할 때에만 걷기 애니메이션 출력 -> 이동 중일 때만 애니메이션 시간이 증가함
+		//if (playerMoving && titanAnimator)
+		//{
+		//	titanAnimator->UpdateAnimation(deltaTime);
+		//}
+
+		// 애니메이션 시간 업데이트 방식 수정하기
+		if (titanAnimator)
 		{
+			updateAnimationState();
 			titanAnimator->UpdateAnimation(deltaTime);
 		}
 
@@ -200,7 +217,7 @@ public:
 
 		if (titanAnimator)
 		{
-			glUniform1i(glGetUniformLocation(shader_program[0], "useAnimation"), playerMoving ? 1 : 0);
+			glUniform1i(glGetUniformLocation(shader_program[0], "useAnimation"), 1);
 
 			const auto& transforms = titanAnimator->GetFinalBoneMatrices();
 			for (int i = 0; i < transforms.size(); ++i)
@@ -219,7 +236,7 @@ public:
 			glUniform1i(glGetUniformLocation(shader_program[0], "useAnimation"), 0);
 		}
 
-		titan.draw(shader_program[0]);
+		//titan.draw(shader_program[0]);
 
 		// 1인칭, 3인칭 변환 시 렌더 모델 스위치
 		if (!isFirstPerson)
@@ -261,6 +278,20 @@ public:
 				cameraPitch = 0.0f;
 			else
 				cameraPitch = -10.0f;
+		}
+
+		// F 키로 Attack
+		if (key == GLFW_KEY_F)
+		{
+			if (action == GLFW_PRESS && !attackKeyPressed)
+			{
+				attackRequested = true;
+				attackKeyPressed = true;
+			}
+			else if (action == GLFW_RELEASE)
+			{
+				attackKeyPressed = false;
+			}
 		}
 	}
 
@@ -367,6 +398,66 @@ public:
 		if (playerPos[2] > mapLimit) playerPos[2] = mapLimit;
 	}
 
+	// 애니메이션 상태 결정 함수 
+	void updateAnimationState()
+	{
+		if (isAttacking)
+		{
+			if (titanAnimator->IsAnimationFinished())
+			{
+				isAttacking = false;
+			}
+			else
+			{
+				currentAnimState = TitanAnimState::Attack;
+			}
+		}
+
+		if (!isAttacking)
+		{
+			if (attackRequested)
+			{
+				currentAnimState = TitanAnimState::Attack;
+				attackRequested = false;
+				isAttacking = true;
+			}
+			else if (playerMoving)
+			{
+				currentAnimState = TitanAnimState::Walk;
+			}
+			else
+			{
+				currentAnimState = TitanAnimState::Idle;
+			}
+		}
+
+		if (currentAnimState == previousAnimState)
+			return;
+
+		switch (currentAnimState)
+		{
+		case TitanAnimState::Idle:
+			titanAnimator->PlayAnimation(titanIdle, true);
+			break;
+
+		case TitanAnimState::Walk:
+			titanAnimator->PlayAnimation(titanWalk, true);
+			break;
+
+		case TitanAnimState::Attack:
+			titanAnimator->PlayAnimation(titanAttack, false);
+			break;
+		}
+
+		previousAnimState = currentAnimState;
+	}
+
+	enum class TitanAnimState
+	{
+		Idle,
+		Walk,
+		Attack
+	};
 
 private:
 	GLuint shader_program[3]; // VAO, VBO 관련 멤버변수 필요없음 -> Model.h에 다 있기 때문
@@ -404,9 +495,19 @@ private:
 	// 1인칭 전환 변수
 	bool isFirstPerson = false;
 
+	Animation* titanIdle = nullptr;
 	Animation* titanWalk = nullptr;
+	Animation* titanAttack = nullptr;
 	Animator* titanAnimator = nullptr;
+
+	TitanAnimState currentAnimState = TitanAnimState::Idle;
+	TitanAnimState previousAnimState = TitanAnimState::Idle;
+
 	bool playerMoving = false;
+	bool attackRequested = false;
+	bool attackKeyPressed = false;
+	
+	bool isAttacking = false;
 };
 // DECLARE_MAIN의 하나뿐인 인스턴스
 DECLARE_MAIN(my_application)

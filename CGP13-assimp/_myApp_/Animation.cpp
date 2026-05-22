@@ -5,7 +5,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 
-Animation::Animation(const std::string& animationPath, Model* model)
+Animation::Animation(const std::string& animationPath, Model* model) : Animation(animationPath, model, "")
 {
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(animationPath,
@@ -24,6 +24,68 @@ Animation::Animation(const std::string& animationPath, Model* model)
     const aiAnimation* animation = scene->mAnimations[0];
     m_Duration = static_cast<float>(animation->mDuration);
     m_TicksPerSecond = animation->mTicksPerSecond != 0.0 ? static_cast<float>(animation->mTicksPerSecond) : 25.0f;
+
+    ReadHeirarchyData(m_RootNode, scene->mRootNode);
+    ReadMissingBones(animation, *model);
+}
+
+// 이름으로 애니메이션을 찾는 생성자
+Animation::Animation(const std::string& animationPath, Model* model, const std::string& animationName)
+{
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(animationPath,
+        aiProcess_Triangulate |
+        aiProcess_FlipUVs |
+        aiProcess_GenSmoothNormals |
+        aiProcess_LimitBoneWeights
+    );
+
+    if (!scene || !scene->mRootNode || scene->mNumAnimations == 0)
+    {
+        std::cout << "ERROR::ANIMATION:: animation not found: " << animationPath << std::endl;
+        return;
+    }
+
+    const aiAnimation* animation = nullptr;
+
+    if (animationName.empty())
+    {
+        animation = scene->mAnimations[0];
+    }
+    else
+    {
+        for (unsigned int i = 0; i < scene->mNumAnimations; ++i)
+        {
+            std::string currentName = scene->mAnimations[i]->mName.C_Str();
+
+            if (currentName == animationName)
+            {
+                animation = scene->mAnimations[i];
+                break;
+            }
+        }
+
+        if (!animation)
+        {
+            std::cout << "ERROR::ANIMATION:: animation name not found: "
+                << animationName << std::endl;
+
+            std::cout << "Available animations:" << std::endl;
+            for (unsigned int i = 0; i < scene->mNumAnimations; ++i)
+            {
+                std::cout << " - " << scene->mAnimations[i]->mName.C_Str() << std::endl;
+            }
+
+            animation = scene->mAnimations[0];
+        }
+    }
+
+    std::cout << "Loaded Animation: " << animation->mName.C_Str() << std::endl;
+
+    m_Duration = static_cast<float>(animation->mDuration);
+    m_TicksPerSecond = animation->mTicksPerSecond != 0.0
+        ? static_cast<float>(animation->mTicksPerSecond)
+        : 25.0f;
 
     ReadHeirarchyData(m_RootNode, scene->mRootNode);
     ReadMissingBones(animation, *model);

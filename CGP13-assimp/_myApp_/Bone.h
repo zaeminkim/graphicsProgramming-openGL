@@ -24,6 +24,13 @@ struct KeyScale
     float timeStamp;
 };
 
+// 애니메이션 키프레임 하나하나(팔 하나, 다리 하나, ...)를 보관하고, 현재 시간에 맞는 Bone 변환 행렬을 계산하는 클래스
+// 현재 애니메이션 시간 입력 
+// -> 해당 Bone의 position keyframe 찾기
+// -> rotation keyframe 찾기
+// -> scale keyframe 찾기
+// -> 두 keyframe 사이를 보간
+// -> localTransform 행렬 생성
 class Bone
 {
 public:

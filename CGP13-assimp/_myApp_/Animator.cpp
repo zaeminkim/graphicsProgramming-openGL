@@ -18,16 +18,42 @@ void Animator::UpdateAnimation(float dt)
     {
         m_CurrentTime += m_CurrentAnimation->GetTicksPerSecond() * dt;
         float duration = m_CurrentAnimation->GetDuration();
+
         if (duration > 0.0f)
-            m_CurrentTime = fmod(m_CurrentTime, duration);
+        {
+            if (m_Loop)
+            {
+                m_CurrentTime = fmod(m_CurrentTime, duration);
+                m_Finished = false;
+            }
+            else
+            {
+                if (m_CurrentTime >= duration)
+                {
+                    m_CurrentTime = duration;
+                    m_Finished = true;
+                }
+            }
+        }
+
         CalculateBoneTransform(&m_CurrentAnimation->GetRootNode(), glm::mat4(1.0f));
     }
 }
 
 void Animator::PlayAnimation(Animation* pAnimation)
 {
+    PlayAnimation(pAnimation, true);
+}
+
+void Animator::PlayAnimation(Animation* pAnimation, bool loop)
+{
+    if (m_CurrentAnimation == pAnimation && m_Loop == loop)
+        return;
+
     m_CurrentAnimation = pAnimation;
     m_CurrentTime = 0.0f;
+    m_Loop = loop;
+    m_Finished = false;
 }
 
 void Animator::CalculateBoneTransform(const AssimpNodeData* node, const glm::mat4& parentTransform)

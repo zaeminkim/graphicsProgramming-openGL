@@ -34,6 +34,7 @@ Bone::Bone(const std::string& name, int ID, const aiNodeAnim* channel)
     }
 }
 
+//
 void Bone::Update(float animationTime)
 {
     glm::mat4 translation = InterpolatePosition(animationTime);

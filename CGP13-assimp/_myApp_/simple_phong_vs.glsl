@@ -3,8 +3,9 @@
 layout (location = 0) in vec3 pos;
 layout (location = 1) in vec2 texCoord;
 layout (location = 2) in vec3 normal;
-layout (location = 3) in ivec4 boneIds;
-layout (location = 4) in vec4 weights;
+// skeletal animation
+layout (location = 3) in ivec4 boneIds; // vertex마다 영향을 주는 bone ID
+layout (location = 4) in vec4 weights;  // vertex마다 각 bone의 영향은 weight
 
 out vec3 vsPos;
 out vec3 vsNormal;
