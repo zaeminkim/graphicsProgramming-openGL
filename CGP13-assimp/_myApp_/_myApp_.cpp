@@ -8,6 +8,7 @@
 #include "Model.h"
 #include "Animation.h"
 #include "Animator.h"
+#include "Collision.h"
 #include <glm/gtc/type_ptr.hpp>
 
 // sb7::application을 상속받는다.
@@ -83,9 +84,20 @@ public:
 		titan.init();
 		titan.loadModel("model/fatTitan.gltf");
 
+		house.init();
+		house.loadModel("house/scene.gltf");
+		// house model의 AABB 계산
+		houseLocalBox = CalculateModelLocalAABB(house);
+		AddBuilding(vmath::vec3(0.0f, 0.0f, 0.0f), 0.01f);
+		AddBuilding(vmath::vec3(15.0f, 0.0f, 5.0f), 0.01f);
+		AddBuilding(vmath::vec3(-12.0f, 0.0f, -8.0f), 0.01f);
+		AddBuilding(vmath::vec3(8.0f, 0.0f, -18.0f), 0.012f);
+
+		// 애니메이션 출력하기
 		titanIdle = new Animation("model/fatTitan.gltf", &titan, "Idle");
 		titanWalk = new Animation("model/fatTitan.gltf", &titan, "Walk");
 		titanAttack = new Animation("model/fatTitan.gltf", &titan, "Attack");
+		titanJump = new Animation("model/fatTitan.gltf", &titan, "Jump");
 
 		titanAnimator = new Animator(titanIdle);
 
@@ -107,11 +119,13 @@ public:
 		delete titanIdle;
 		delete titanWalk;
 		delete titanAttack;
+		delete titanJump;
 
 		titanAnimator = nullptr;
 		titanIdle = nullptr;
 		titanWalk = nullptr;
 		titanAttack = nullptr;
+		titanJump = nullptr;
 	}
 
 	virtual void render(double currentTime)
@@ -125,6 +139,7 @@ public:
 		lastTime = currentTime;
 
 		updatePlayer(deltaTime);
+		updateJump(deltaTime);
 
 		//// playerMoving : 이동할 때에만 걷기 애니메이션 출력 -> 이동 중일 때만 애니메이션 시간이 증가함
 		//if (playerMoving && titanAnimator)
@@ -158,7 +173,7 @@ public:
 		);
 
 		// 플레이어가 카메라 방향을 바라보게 함
-		// playerYaw = cameraYaw;
+		//playerYaw = cameraYaw;
 
 
 		// 3인칭 카메라 위치
@@ -169,9 +184,21 @@ public:
 		if (isFirstPerson)
 		{
 			// 1인칭: 플레이어 눈 위치
-			float eyeHeight = 1.65f;
+			float eyeHeight = 3.7f;
+			float eyeForwardOffset = 0.15f;
 
-			eye = playerPos + vmath::vec3(0.0f, eyeHeight, 0.0f);
+			float yawOnlyRad = playerYaw * 3.141592f / 180.0f;
+
+			vmath::vec3 modelForward = vmath::vec3(
+				sinf(yawOnlyRad),
+				0.0f,
+				cosf(yawOnlyRad)
+			);
+
+			eye = playerPos
+				+ vmath::vec3(0.0f, eyeHeight, 0.0f)
+				+ modelForward * eyeForwardOffset;
+
 			center = eye + cameraDir * 5.0f;
 		}
 		else
@@ -213,7 +240,24 @@ public:
 		// 1.0f = 현실의 1m 로 가정하고 draw()
 		vmath::mat4 model_bg = vmath::translate(0.0f, 0.0f, 0.0f) * vmath::scale(5.5f);
 		glUniformMatrix4fv(glGetUniformLocation(shader_program[0], "model"), 1, GL_FALSE, model_bg);
+		glUniform1i(glGetUniformLocation(shader_program[0], "useAnimation"), 0);
 		bg.draw(shader_program[0]); // VAO, Texture 바인드 안 해도 됨 -> render()에서 draw() 하나만 작성하면 됨
+
+		//vmath::mat4 model_house = vmath::translate(0.0f, 0.0f, 0.0f) * vmath::scale(0.01f);
+		//vmath::mat4 model_house = vmath::translate(housePos[0], housePos[1], housePos[2]) * vmath::scale(houseScale);
+		//glUniformMatrix4fv(glGetUniformLocation(shader_program[0], "model"), 1, GL_FALSE, model_house);
+		//glUniform1i(glGetUniformLocation(shader_program[0], "useAnimation"), 0);
+		//house.draw(shader_program[0]);
+
+		glUniform1i(glGetUniformLocation(shader_program[0], "useAnimation"), 0);
+
+		for (const BuildingInstance& building : buildings)
+		{
+			vmath::mat4 model_house = vmath::translate(building.position[0], building.position[1], building.position[2]) * vmath::scale(building.scale);
+			glUniformMatrix4fv(glGetUniformLocation(shader_program[0], "model"), 1, GL_FALSE, model_house);
+			house.draw(shader_program[0]);
+		}
+
 
 		if (titanAnimator)
 		{
@@ -236,15 +280,19 @@ public:
 			glUniform1i(glGetUniformLocation(shader_program[0], "useAnimation"), 0);
 		}
 
-		//titan.draw(shader_program[0]);
+		//corps.draw(shader_program[0]);
 
-		// 1인칭, 3인칭 변환 시 렌더 모델 스위치
-		if (!isFirstPerson)
-		{
-			vmath::mat4 model_titan = vmath::translate(playerPos[0], playerPos[1], playerPos[2]) * vmath::rotate(playerYaw, 0.0f, 1.0f, 0.0f) * vmath::scale(playerScale);
-			glUniformMatrix4fv(glGetUniformLocation(shader_program[0], "model"), 1, GL_FALSE, model_titan);
-			titan.draw(shader_program[0]);
-		}
+		//// 1인칭, 3인칭 변환 시 렌더 모델 스위치
+		//if (!isFirstPerson)
+		//{
+		//	vmath::mat4 model_titan = vmath::translate(playerPos[0], playerPos[1], playerPos[2]) * vmath::rotate(playerYaw, 0.0f, 1.0f, 0.0f) * vmath::scale(playerScale);
+		//	glUniformMatrix4fv(glGetUniformLocation(shader_program[0], "model"), 1, GL_FALSE, model_titan);
+		//	titan.draw(shader_program[0]);
+		//}
+
+		vmath::mat4 model_titan = vmath::translate(playerPos[0], playerPos[1], playerPos[2]) * vmath::rotate(playerYaw, 0.0f, 1.0f, 0.0f) * vmath::scale(playerScale);
+		glUniformMatrix4fv(glGetUniformLocation(shader_program[0], "model"), 1, GL_FALSE, model_titan);
+		titan.draw(shader_program[0]);
 	}
 
 	void onResize(int w, int h)
@@ -293,6 +341,18 @@ public:
 				attackKeyPressed = false;
 			}
 		}
+
+		// Spacebar 키로 Jump
+		if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+		{
+			if (!isJumping && !isAttacking)
+			{
+				isJumping = true;
+				verticalVelocity = jumpPower;
+
+				currentAnimState = TitanAnimState::Jump;
+			}
+		}
 	}
 
 	// 마우스로 조절 입력 처리
@@ -314,22 +374,27 @@ public:
 		cameraYaw += xoffset * mouseSensitivity;
 		cameraPitch += yoffset * mouseSensitivity;
 
-		// 1인칭의 경우 위아래를 더 많이 볼 수 있도록
-		if (isFirstPerson)
-		{
-			if (cameraPitch > 60.0f)
-				cameraPitch = 60.0f;
+		
+		if (cameraPitch > 60.0f)
+			cameraPitch = 60.0f;
 
-			if (cameraPitch < -60.0f)
-				cameraPitch = -60.0f;
-		}
-		else
-		{
-			if (cameraPitch > 60.0f)
-				cameraPitch = 60.0f;
+		if (cameraPitch < -30.0f)
+			cameraPitch = -30.0f;
+	}
 
-			if (cameraPitch < -30.0f)
-				cameraPitch = -30.0f;
+	void updateJump(float dt)
+	{
+		if (isJumping)
+		{
+			verticalVelocity += gravity * dt;
+			playerPos[1] += verticalVelocity * dt;
+
+			if (playerPos[1] <= groundY)
+			{
+				playerPos[1] = groundY;
+				verticalVelocity = 0.0f;
+				isJumping = false;
+			}
 		}
 	}
 
@@ -337,6 +402,12 @@ public:
 	void updatePlayer(float dt)
 	{
 		playerMoving = false;
+
+		// F키 (공격 시)에는 이동 금지
+		if (isAttacking || attackRequested) 
+			return;
+		
+
 		float yawRad = cameraYaw * 3.141592f / 180.0f;
 
 		vmath::vec3 forward = vmath::vec3(
@@ -375,8 +446,31 @@ public:
 			moveDir[0] /= len;
 			moveDir[2] /= len;
 
-			playerPos += moveDir * playerSpeed * dt;
-			playerMoving = true;
+			vmath::vec3 oldPos = playerPos;
+			vmath::vec3 desiredPos = playerPos + moveDir * playerSpeed * dt;
+
+			bool moved = false;
+
+			// X축 이동 먼저 검사
+			vmath::vec3 tryX = vmath::vec3(desiredPos[0], oldPos[1], oldPos[2]);
+
+			if (!CheckStaticCollision(GetTitanCircle(tryX)))
+			{
+				playerPos[0] = tryX[0];
+				moved = true;
+			}
+
+			// Z축 이동 따로 검사
+			vmath::vec3 tryZ = vmath::vec3(playerPos[0], oldPos[1], desiredPos[2]);
+
+			if (!CheckStaticCollision(GetTitanCircle(tryZ)))
+			{
+				playerPos[2] = tryZ[2];
+				moved = true;
+			}
+
+			playerMoving = moved;
+
 
 			// 이동 중에는 플레이어가 이동 방향을 보게 하기
 			if (isFirstPerson)
@@ -401,6 +495,7 @@ public:
 	// 애니메이션 상태 결정 함수 
 	void updateAnimationState()
 	{
+		// 공격 중이면 공격 애니메이션이 끝날 때까지 유지
 		if (isAttacking)
 		{
 			if (titanAnimator->IsAnimationFinished())
@@ -413,6 +508,7 @@ public:
 			}
 		}
 
+		// 공격 중이 아닐 때만 다른 상태 판단
 		if (!isAttacking)
 		{
 			if (attackRequested)
@@ -420,6 +516,10 @@ public:
 				currentAnimState = TitanAnimState::Attack;
 				attackRequested = false;
 				isAttacking = true;
+			}
+			else if (isJumping)
+			{
+				currentAnimState = TitanAnimState::Jump;
 			}
 			else if (playerMoving)
 			{
@@ -431,9 +531,11 @@ public:
 			}
 		}
 
+		// 상태가 같으면 같은 애니메이션을 다시 시작하지 않음
 		if (currentAnimState == previousAnimState)
 			return;
 
+		// 조건에 따른 애니메이션 출력
 		switch (currentAnimState)
 		{
 		case TitanAnimState::Idle:
@@ -447,6 +549,10 @@ public:
 		case TitanAnimState::Attack:
 			titanAnimator->PlayAnimation(titanAttack, false);
 			break;
+		
+		case TitanAnimState::Jump:
+			titanAnimator->PlayAnimation(titanJump, false);
+			break;
 		}
 
 		previousAnimState = currentAnimState;
@@ -456,13 +562,97 @@ public:
 	{
 		Idle,
 		Walk,
-		Attack
+		Attack,
+		Jump
 	};
+
+	struct BuildingInstance
+	{
+		vmath::vec3 position;
+		float scale;
+		AABB worldBox;
+	};
+
+	// 3d 모델에서 자동으로 AABB 계산하는 함수
+	AABB CalculateModelLocalAABB(const Model& model)
+	{
+		AABB box;
+
+		box.min = vmath::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
+		box.max = vmath::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+		for (const auto& mesh : model.meshes)
+		{
+			for (const auto& vertex : mesh.vertices)
+			{
+				const vmath::vec3& p = vertex.Position;
+
+				if (p[0] < box.min[0]) box.min[0] = p[0];
+				if (p[1] < box.min[1]) box.min[1] = p[1];
+				if (p[2] < box.min[2]) box.min[2] = p[2];
+
+				if (p[0] > box.max[0]) box.max[0] = p[0];
+				if (p[1] > box.max[1]) box.max[1] = p[1];
+				if (p[2] > box.max[2]) box.max[2] = p[2];
+			}
+		}
+		return box;
+	}
+
+	AABB TransformAABB_TranslateScale(
+		const AABB& localBox,
+		const vmath::vec3& position,
+		float scale
+	)
+	{
+		AABB worldBox;
+
+		worldBox.min = position + localBox.min * scale;
+		worldBox.max = position + localBox.max * scale;
+
+		return worldBox;
+	}
+
+
+	Circle GetTitanCircle(const vmath::vec3& pos)
+	{
+		return MakeCircle(
+			pos,
+			titanCollisionRadius,
+			titanCollisionHeight
+		);
+	}
+
+	bool CheckStaticCollision(const Circle& circle)
+	{
+		for (const AABB& box : staticColliders)
+		{
+			if (CheckCircleAABB(circle, box))
+				return true;
+		}
+
+		return false;
+	}
+
+	void AddBuilding(const vmath::vec3& position, float scale)
+	{
+		BuildingInstance building;
+		building.position = position;
+		building.scale = scale;
+		building.worldBox = TransformAABB_TranslateScale(
+			houseLocalBox,
+			position,
+			scale
+		);
+
+		buildings.push_back(building);
+		staticColliders.push_back(building.worldBox);
+	}
 
 private:
 	GLuint shader_program[3]; // VAO, VBO 관련 멤버변수 필요없음 -> Model.h에 다 있기 때문
 	SimpleModel bg;
-	Model titan;
+	Model titan, house;
 
 	// titan status
 	vmath::vec3 playerPos = vmath::vec3(0.0f, 0.0f, 0.0f);
@@ -498,16 +688,32 @@ private:
 	Animation* titanIdle = nullptr;
 	Animation* titanWalk = nullptr;
 	Animation* titanAttack = nullptr;
+	Animation* titanJump = nullptr;
+
 	Animator* titanAnimator = nullptr;
 
 	TitanAnimState currentAnimState = TitanAnimState::Idle;
 	TitanAnimState previousAnimState = TitanAnimState::Idle;
 
 	bool playerMoving = false;
+
 	bool attackRequested = false;
 	bool attackKeyPressed = false;
-	
 	bool isAttacking = false;
+
+	bool isJumping = false;
+	float verticalVelocity = 0.0f;
+	float gravity = -55.0f;
+	float jumpPower = 16.0f;
+	float groundY = 0.0f;
+
+	AABB houseLocalBox;
+	std::vector<BuildingInstance> buildings;
+
+	std::vector<AABB> staticColliders;
+
+	float titanCollisionRadius = 1.2f;
+	float titanCollisionHeight = 4.0f;
 };
 // DECLARE_MAIN의 하나뿐인 인스턴스
 DECLARE_MAIN(my_application)

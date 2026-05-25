@@ -129,6 +129,7 @@ void Model::ExtractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* 
     }
 }
 
+// Assimp에서 읽은 정점을 vertex.Position에 저장
 Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
 {
     std::vector<Vertex> vertices;
