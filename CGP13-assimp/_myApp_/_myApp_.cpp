@@ -84,6 +84,9 @@ public:
 		titan.init();
 		titan.loadModel("model/fatTitan.gltf");
 
+		corps.init();
+		corps.loadModel("corps/scene.gltf");
+
 		house.init();
 		house.loadModel("house/scene.gltf");
 		// house model의 AABB 계산
@@ -101,10 +104,10 @@ public:
 
 		titanAnimator = new Animator(titanIdle);
 
-		// player 초기 위치
-		playerPos = vmath::vec3(0.0f, 0.0f, 20.0f);
-		playerYaw = 180.0f;
-		playerScale = 1.0f;
+		//// player 초기 위치
+		//playerPos = vmath::vec3(0.0f, 0.0f, 20.0f);
+		//playerYaw = 180.0f;
+		//playerScale = 1.0f;
 
 		// 마우스 커서 안 보이게 하기
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -652,13 +655,13 @@ public:
 private:
 	GLuint shader_program[3]; // VAO, VBO 관련 멤버변수 필요없음 -> Model.h에 다 있기 때문
 	SimpleModel bg;
-	Model titan, house;
+	Model titan, house, corps;
 
 	// titan status
-	vmath::vec3 playerPos = vmath::vec3(0.0f, 0.0f, 0.0f);
+	vmath::vec3 playerPos = vmath::vec3(0.0f, 0.0f, 20.0f);
 	float playerYaw = 0.0f;
 	float playerSpeed = 16.0f;
-	float playerScale = 1.0f;
+	float playerScale = 1.5f;
 
 	// key input status
 	bool keyUp = false;
@@ -714,6 +717,30 @@ private:
 
 	float titanCollisionRadius = 1.2f;
 	float titanCollisionHeight = 4.0f;
+
+	struct CorpsSoldier
+	{
+		vmath::vec3 position;
+		vmath::vec3 velocity;
+
+		float yaw = 0.0f;
+		float scale = 1.0f;
+
+		float radius = 0.4f;
+		float height = 1.8f;
+
+		bool alive = true;
+
+		bool grappling = false;
+		vmath::vec3 hookPoint = vmath::vec3(0.0f, 0.0f, 0.0f);
+
+		float maxSpeed = 28.0f;
+		float grappleAccel = 60.0f;
+		float chaseAccel = 18.0f;
+	};
+
+	std::vector<CorpsSoldier> corpsList;
+
 };
 // DECLARE_MAIN의 하나뿐인 인스턴스
 DECLARE_MAIN(my_application)
