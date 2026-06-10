@@ -94,7 +94,7 @@ public:
 		AddBuilding(vmath::vec3(0.0f, 0.0f, 0.0f), 0.01f);
 		AddBuilding(vmath::vec3(15.0f, 0.0f, 5.0f), 0.01f);
 		AddBuilding(vmath::vec3(-12.0f, 0.0f, -8.0f), 0.01f);
-		AddBuilding(vmath::vec3(8.0f, 0.0f, -18.0f), 0.012f);
+		AddBuilding(vmath::vec3(8.0f, 0.0f, -18.0f), 0.03f);
 
 		// 애니메이션 출력하기
 		titanIdle = new Animation("model/fatTitan.gltf", &titan, "Idle");
@@ -718,28 +718,28 @@ private:
 	float titanCollisionRadius = 1.2f;
 	float titanCollisionHeight = 4.0f;
 
-	struct CorpsSoldier
-	{
-		vmath::vec3 position;
-		vmath::vec3 velocity;
+	//struct CorpsSoldier
+	//{
+	//	vmath::vec3 position;
+	//	vmath::vec3 velocity;
 
-		float yaw = 0.0f;
-		float scale = 1.0f;
+	//	float yaw = 0.0f;
+	//	float scale = 1.0f;
 
-		float radius = 0.4f;
-		float height = 1.8f;
+	//	float radius = 0.4f;
+	//	float height = 1.8f;
 
-		bool alive = true;
+	//	bool alive = true;
 
-		bool grappling = false;
-		vmath::vec3 hookPoint = vmath::vec3(0.0f, 0.0f, 0.0f);
+	//	bool grappling = false;
+	//	vmath::vec3 hookPoint = vmath::vec3(0.0f, 0.0f, 0.0f);
 
-		float maxSpeed = 28.0f;
-		float grappleAccel = 60.0f;
-		float chaseAccel = 18.0f;
-	};
+	//	float maxSpeed = 28.0f;
+	//	float grappleAccel = 60.0f;
+	//	float chaseAccel = 18.0f;
+	//};
 
-	std::vector<CorpsSoldier> corpsList;
+	//std::vector<CorpsSoldier> corpsList;
 
 };
 // DECLARE_MAIN의 하나뿐인 인스턴스
